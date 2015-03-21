@@ -116,11 +116,11 @@ class TestClass(unittest.TestCase):
             with rosbag.Bag(intermediate, 'r') as bag:
                 for topic, msg, t in bag:
                     # non-standard topic name should have flag in encoding
-                    if topic == '/foo':
-                        self.assertTrue(msg.encoding.endswith(', no-basename'))
+                    if topic == '/foo/encoding':
+                        self.assertTrue(str(msg).endswith(', no-basename'))
                     # standard topic name should not have flag in encoding
-                    elif topic == 'foo/bar/image_raw':
-                        self.assertFalse(msg.encoding.endswith(', no-basename'))
+                    elif topic == '/foo/bar/encoding':
+                        self.assertFalse(str(msg).endswith(', no-basename'))
             # run uncompress on bag
             uncompress(intermediate, output)
 
@@ -128,3 +128,4 @@ class TestClass(unittest.TestCase):
             with rosbag.Bag(output, 'r') as bag:
                 for topic, msg, t in bag:
                     self.check_contents(create_image_msg(), msg)
+                    self.assertFalse(msg.encoding.endswith(', no-basename'))
