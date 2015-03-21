@@ -45,11 +45,15 @@ class TestBag():
         self.filename = os.path.join(self.tempdir, 'test.bag')
         with rosbag.Bag(self.filename, 'w') as bagfile:
             for n in range(self.num_images):
+                # write to a standard topic name
                 bagfile.write('/foo/bar/image_raw', create_image_msg(),
+                              rospy.Time(n + 100))
+                # write to a non-standard topic name
+                bagfile.write('/foo', create_image_msg(),
                               rospy.Time(n + 100))
         return self
 
-    def __exit__(	self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         shutil.rmtree(self.tempdir)
 
 
@@ -90,11 +94,8 @@ class TestClass(unittest.TestCase):
         self.assertEqual(image_topic_basename('foo/bar/image_raw'), 'foo/bar/')
         self.assertEqual(image_topic_basename('foo/bar/compressed'), 'foo/bar/')
         self.assertEqual(image_topic_basename('foo/bar/encoding'), 'foo/bar/')
-        try:
-            image_topic_basename('foo/bar/other')
-            self.assertFalse("Should have thrown")
-        except:
-            self.assertTrue("Has thrown")
+        # non-standard topic name should return None
+        self.assertEqual(image_topic_basename('foo'), None)
 
     def test_bag_unbag_empty(self):
         with TestBag(0) as bag_context:
@@ -107,8 +108,23 @@ class TestClass(unittest.TestCase):
         with TestBag(4) as bag_context:
             intermediate = os.path.join(bag_context.tempdir, 'intermediate.bag')
             output = os.path.join(bag_context.tempdir, 'output.bag')
+
+            # run compress on the bag
             compress(bag_context.filename, intermediate)
+
+            # check intermediate bag
+            with rosbag.Bag(intermediate, 'r') as bag:
+                for topic, msg, t in bag:
+                    # non-standard topic name should have flag in encoding
+                    if topic == '/foo':
+                        self.assertTrue(msg.encoding.endswith(', no-basename'))
+                    # standard topic name should not have flag in encoding
+                    elif topic == 'foo/bar/image_raw':
+                        self.assertFalse(msg.encoding.endswith(', no-basename'))
+            # run uncompress on bag
             uncompress(intermediate, output)
+
+            # check final uncompressed bag
             with rosbag.Bag(output, 'r') as bag:
                 for topic, msg, t in bag:
                     self.check_contents(create_image_msg(), msg)

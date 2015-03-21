@@ -77,8 +77,7 @@ def image_topic_basename(topic):
     for e in endings:
         if topic.endswith(e):
             return topic[:-1 * len(e)]
-    raise Exception("invalid topic for truncation %s looking for endings %s" %
-                    (topic, endings))
+    return None  # return None if unable to get basename
 
 
 class EncodingCache:
@@ -107,11 +106,18 @@ def compress(bagfile_in, bagfile_out):
             process_log = {}
             print("Compressing %s into %s" % (bagfile_in, bagfile_out))
             for topic, msg, t in bag.read_messages():
-                if topic.endswith('image_raw'):
+                # if topic.endswith('image_raw'):
+                if msg._type == "sensor_msgs/Image":
                     # print("compressing %s, time is %s" % (topic, t))
                     bname = image_topic_basename(topic)
                     try:
                         msg, encoding_msg = compress_image(msg)
+                        # use current topic name if can't find basename
+                        if bname is None:
+                            bname = topic + "/"  # with extra slash
+                            # add a flag if non-default topic name
+                            encoding_msg.data += ", no-basename"
+
                         encoding_topic = bname + "encoding"
                         topic = bname + "compressed"
                         outbag.write(encoding_topic, encoding_msg, t)
@@ -139,15 +145,30 @@ def uncompress(bagfile_in, bagfile_out):
             encoding_cache = EncodingCache()
             for topic, msg, t in bag.read_messages():
                 bname = image_topic_basename(topic)
+                # use current topic name if can't find basename
+                if bname is None:
+                    bname = topic
                 if topic.endswith('encoding'):
                     encoding_cache.insert_encoding(bname, msg.data)
                     continue  # do not rewrite the encoding message
-                if topic.endswith('compressed'):
+                if msg._type == "sensor_msgs/CompressedImage":
                     # print("uncompressing %s, time is %s" % (topic, t))
                     try:
                         enc = encoding_cache.lookup_encoding(bname)
+                        # default topic true
+                        is_default_topic = True
+                        if enc.endswith('no-basename'):
+                            is_default_topic = False
+                            # remove non-default flag from encoding.data string
+                            enc = enc[:enc.rfind(',')]
+
                         msg = uncompress_image(msg, enc)
-                        topic = bname + 'image_raw'
+                        # use default topic naming by appending 'image_raw'
+                        if is_default_topic:
+                            topic = bname + 'image_raw'
+                        # else just remove compressed from topic name
+                        else:
+                            topic = topic[:topic.rfind('/')]
                         if bname in process_log:
                             process_log[bname] += 1
                         else:
