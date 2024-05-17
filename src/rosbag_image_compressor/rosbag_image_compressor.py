@@ -32,10 +32,8 @@ def compress_image(msg):
     # fromstring is not available on precise python-imaging v 1.1.7
     # but has been deprecated in v 2.0 using it for now while we need
     # to support precise
-    # img = Image.frombytes("L", (msg.width, msg.height), msg.data,
-    #                       'raw', "L", 0, 1)
-    img = Image.fromstring("L", (msg.width, msg.height), msg.data,
-                           'raw', "L", 0, 1)
+    img = Image.frombytes("L", (msg.width, msg.height), msg.data,
+                          'raw', "L", 0, 1)
     # img.show()
     output = BytesIO()
     img.save(output, format='png')
