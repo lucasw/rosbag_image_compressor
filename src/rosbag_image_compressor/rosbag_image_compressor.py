@@ -15,38 +15,24 @@
 # limitations under the License.
 
 
+from cv_bridge import CvBridge
 from io import BytesIO
-import os
 from PIL import Image
 import rosbag
-from sensor_msgs.msg import CompressedImage
 from sensor_msgs.msg import Image as smImage
-from std_msgs.msg import String
 
 
-def compress_image(msg):
+def compress_image(cv_bridge: CvBridge, msg: smImage, dst_format='jpg') -> smImage:
     """
     Take a sensor_msgs/Image
     return a sensor_msgs/CompressedImage
     """
-    # fromstring is not available on precise python-imaging v 1.1.7
-    # but has been deprecated in v 2.0 using it for now while we need
-    # to support precise
-    img = Image.frombytes("L", (msg.width, msg.height), msg.data,
-                          'raw', "L", 0, 1)
-    # img.show()
-    output = BytesIO()
-    img.save(output, format='png')
-    output.flush()
+    image_np = cv_bridge.imgmsg_to_cv2(msg)
+    output_msg = cv_bridge.cv2_to_compressed_imgmsg(image_np, dst_format=dst_format)
 
-    output_msg = CompressedImage()
     output_msg.header = msg.header
-    output_msg.format = 'png'
-    output_msg.data = output.getvalue()
 
-    encoding_msg = String()
-    encoding_msg.data = msg.encoding
-    return output_msg, encoding_msg
+    return output_msg
 
 
 def uncompress_image(compressed_msg, encoding):
@@ -99,26 +85,25 @@ class EncodingCache:
 
 def compress(bagfile_in, bagfile_out):
     """ Iterate over bagfile_in and compress images into bagfile_out """
+    cv_bridge = CvBridge()
+
     with rosbag.Bag(bagfile_in) as bag:
         with rosbag.Bag(bagfile_out, 'w') as outbag:
             process_log = {}
             print("Compressing %s into %s" % (bagfile_in, bagfile_out))
             for topic, msg, t in bag.read_messages():
-                # if topic.endswith('image_raw'):
                 if msg._type == "sensor_msgs/Image":
                     # print("compressing %s, time is %s" % (topic, t))
                     bname = image_topic_basename(topic)
                     try:
-                        msg, encoding_msg = compress_image(msg)
+                        msg = compress_image(cv_bridge, msg)
                         # use current topic name if can't find basename
                         if bname is None:
                             bname = topic + "/"  # with extra slash
-                            # add a flag if non-default topic name
-                            encoding_msg.data += ", no-basename"
 
-                        encoding_topic = bname + "encoding"
-                        topic = bname + "compressed"
-                        outbag.write(encoding_topic, encoding_msg, t)
+                        # TODO(lucasw) the convention is image/compressed rather than image_raw/compressed?
+                        # but don't want to enforce a requirement on the source topic
+                        topic += "/compressed"
                         if bname in process_log:
                             process_log[bname] += 1
                         else:
