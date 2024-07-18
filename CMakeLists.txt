@@ -154,6 +154,8 @@ install(PROGRAMS
 ## Testing ##
 #############
 
+if(CATKIN_ENABLE_TESTING)
+
 ## Add gtest based cpp test target and link libraries
 # catkin_add_gtest(${PROJECT_NAME}-test test/test_rosbag_image_compressor.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
@@ -162,3 +164,5 @@ install(PROGRAMS
 
 ## Add folders to be run by python nosetests
 catkin_add_nosetests(test)
+
+endif()
